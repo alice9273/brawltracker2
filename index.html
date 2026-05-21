@@ -100,50 +100,57 @@
             document.getElementById('statsBox').style.display = 'block';
             document.getElementById('btnReset').style.display = 'block';
             
-            // À chaque ouverture, on vérifie si on a changé de jour pour mettre à jour
             checkAndUpdateTrophies();
         } else {
             renderCalendar();
         }
     }
 
+    // FONCTION DE RECUPERATION ROBUSTE COMPATIBLE GITHUB
     async function fetchTrophies(tag) {
-    // ÉTAPE 1 : On force le tag en MAJUSCULES et on vire le # pour éviter la 404
-    let cleanTag = tag.replace('#', '').toUpperCase().trim();
-    
-    if(cleanTag.length < 4) {
-        alert("Le tag entré est trop court !");
-        return null;
-    }
-
-    // ÉTAPE 2 : On utilise l'API BrawlTools (Zéro proxy temporaire requis !)
-    let url = `https://api.brawltools.net/v1/player/${cleanTag}`;
-
-    try {
-        document.getElementById('loadingStatus').style.display = 'block';
+        let cleanTag = tag.replace('#', '').toUpperCase().trim();
         
-        let response = await fetch(url);
-
-        if (!response.ok) {
-            throw new Error("Joueur introuvable (Vérifie ton ID) ou serveur en maintenance. Code : " + response.status);
-        }
-        
-        let data = await response.json();
-        document.getElementById('loadingStatus').style.display = 'none';
-        
-        // On récupère les trophées dans la base de données
-        if (data && data.trophies !== undefined) {
-            return data.trophies;
-        } else {
-            alert("Impossible de lire les trophées dans les données reçues.");
+        if(cleanTag.length < 4) {
+            alert("Le tag entré est trop court !");
             return null;
         }
 
-    } catch (error) {
-        document.getElementById('loadingStatus').style.display = 'none';
-        alert("Erreur : " + error.message);
-        return null;
-    }
+        let url = `https://brawltime.ninja/api/player/${cleanTag}`;
+
+        try {
+            document.getElementById('loadingStatus').style.display = 'block';
+            let response = await fetch(url);
+
+            if (!response.ok) {
+                throw new Error("Joueur introuvable. Code : " + response.status);
+            }
+            
+            let data = await response.json();
+            document.getElementById('loadingStatus').style.display = 'none';
+            
+            if (data && data.trophies !== undefined) {
+                return data.trophies;
+            } else {
+                throw new Error("Données de trophées invalides");
+            }
+
+        } catch (error) {
+            // SECOURS AUTOMATIQUE (Scraping via AllOrigins)
+            try {
+                let backupUrl = `https://api.allorigins.win/get?url=${encodeURIComponent('https://brawltime.ninja/profile/' + cleanTag)}`;
+                let res = await fetch(backupUrl);
+                let json = await res.json();
+                let match = json.contents.match(/"trophies"\s*:\s*(\d+)/) || json.contents.match(/(\d+)\s*Trophies/);
+                
+                document.getElementById('loadingStatus').style.display = 'none';
+                if(match) return parseInt(match[1]);
+                throw new Error("Impossible de décoder la page");
+            } catch(e) {
+                document.getElementById('loadingStatus').style.display = 'none';
+                alert("Erreur réseau : Impossible de contacter l'API. Réessaye plus tard.");
+                return null;
+            }
+        }
     }
 
     async function startAutoChallenge() {
@@ -151,14 +158,13 @@
         if(!tagInput) return alert("Mets ton ID Brawl Stars !");
         
         let trophies = await fetchTrophies(tagInput);
-        if(!trophies) return; // Erreur API
+        if(!trophies) return;
 
         playerTag = tagInput.replace('#', '').toUpperCase().trim();
         startTrophies = trophies;
         currentDay = 1;
         history = {};
         
-        // On fixe le jour de départ (aujourd'hui sans les heures)
         let today = new Date();
         today.setHours(0,0,0,0);
         startDate = today.getTime();
@@ -183,15 +189,12 @@
         let nowTime = today.getTime();
         let startTime = parseInt(startDate);
 
-        // Calculer combien de jours se sont écoulés depuis le début
         let diffTime = nowTime - startTime;
-        let elapsedDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // Ex: Jour 1, Jour 2...
+        let elapsedDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-        // Si on a avancé d'un ou plusieurs jours par rapport à notre dernier "currentDay" enregistré
         if (elapsedDays > currentDay && currentDay <= 30) {
             let actualTrophies = await fetchTrophies(playerTag);
             if(actualTrophies) {
-                // On remplit les jours manqués ou le jour actuel avec les tr récupérés à minuit
                 for(let i = currentDay; i < elapsedDays && i <= 30; i++) {
                     history[i] = actualTrophies;
                 }
@@ -203,7 +206,6 @@
                 renderCalendar();
             }
         } else {
-            // Même jour : on met juste à jour tes trophées actuels "en direct" pour info
             let actualTrophies = await fetchTrophies(playerTag);
             if(actualTrophies) updateUI(actualTrophies);
             renderCalendar();
@@ -220,7 +222,7 @@
             let totalGagne = finalScore - startTrophies;
             let finalBox = document.getElementById('finalResult');
             if(totalGagne >= 30000) {
-                finalBox.innerText = `Gagné ! +${totalGagne} tr du futur 🔥`;
+                finalBox.innerText = `Gagné ! +${totalGagne} tr 🔥`;
                 finalBox.className = "final-result green";
             } else {
                 finalBox.innerText = `Échec ! +${totalGagne} tr / 30000 💀`;
