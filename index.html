@@ -107,45 +107,39 @@
         }
     }
 
-    // Fonction magique : appelle l'API libre BrawlAPI sans clé !
     async function fetchTrophies(tag) {
     let cleanTag = tag.replace('#', '').toUpperCase().trim();
     
-    // On utilise un autre miroir public de l'API qui ignore le blocage des applications mobiles
-    let url = `https://api.brawltools.net/v1/player/${cleanTag}`;
+    // On passe par le proxy magique AllOrigins pour débloquer GitHub
+    let targetUrl = `https://api.brawlapi.com/v1/player?tag=${cleanTag}`;
+    let url = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
 
     try {
         document.getElementById('loadingStatus').style.display = 'block';
         
-        let response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json'
-            }
-        });
-
-        if (!response.ok) throw new Error("Erreur serveur");
+        let response = await fetch(url);
+        if (!response.ok) throw new Error("Erreur avec le proxy");
         
-        let data = await response.json();
+        let rawData = await response.json();
+        // AllOrigins renvoie le résultat de l'API sous forme de texte dans "contents"
+        let data = JSON.parse(rawData.contents);
+        
         document.getElementById('loadingStatus').style.display = 'none';
         
-        // Vérification de l'emplacement des trophées dans l'objet reçu
-        return data.trophies || data.currentTrophies || null;
-
-    } catch (error) {
-        // Deuxième essai de secours si le premier échoue (via un autre format)
-        try {
-            let backupResponse = await fetch(`https://api.brawlapi.com/v1/player?tag=${cleanTag}`);
-            let backupData = await backupResponse.json();
-            document.getElementById('loadingStatus').style.display = 'none';
-            return backupData.trophies;
-        } catch(e) {
-            document.getElementById('loadingStatus').style.display = 'none';
-            alert("Erreur réseau Android. L'application bloque l'accès internet. Vérifie les permissions dans Android Studio.");
+        if (data && data.trophies !== undefined) {
+            return data.trophies;
+        } else {
+            alert("ID introuvable. Vérifie ton tag Brawl Stars.");
             return null;
         }
+
+    } catch (error) {
+        document.getElementById('loadingStatus').style.display = 'none';
+        console.error(error);
+        alert("Erreur de connexion. L'API est peut-être saturée, réessaye.");
+        return null;
     }
-            }
+    }
 
     async function startAutoChallenge() {
         let tagInput = document.getElementById('playerTag').value;
