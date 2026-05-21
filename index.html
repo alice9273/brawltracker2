@@ -109,20 +109,43 @@
 
     // Fonction magique : appelle l'API libre BrawlAPI sans clé !
     async function fetchTrophies(tag) {
-        // Nettoyage du tag au cas où il y a un #
-        let cleanTag = tag.replace('#', '').toUpperCase().trim();
+    let cleanTag = tag.replace('#', '').toUpperCase().trim();
+    
+    // On utilise un autre miroir public de l'API qui ignore le blocage des applications mobiles
+    let url = `https://api.brawltools.net/v1/player/${cleanTag}`;
+
+    try {
+        document.getElementById('loadingStatus').style.display = 'block';
+        
+        let response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) throw new Error("Erreur serveur");
+        
+        let data = await response.json();
+        document.getElementById('loadingStatus').style.display = 'none';
+        
+        // Vérification de l'emplacement des trophées dans l'objet reçu
+        return data.trophies || data.currentTrophies || null;
+
+    } catch (error) {
+        // Deuxième essai de secours si le premier échoue (via un autre format)
         try {
-            document.getElementById('loadingStatus').style.display = 'block';
-            let response = await fetch(`https://api.brawlapi.com/v1/player?tag=${cleanTag}`);
-            let data = await response.json();
+            let backupResponse = await fetch(`https://api.brawlapi.com/v1/player?tag=${cleanTag}`);
+            let backupData = await backupResponse.json();
             document.getElementById('loadingStatus').style.display = 'none';
-            return data.trophies;
-        } catch (error) {
+            return backupData.trophies;
+        } catch(e) {
             document.getElementById('loadingStatus').style.display = 'none';
-            alert("Erreur de connexion avec BrawlAPI. Vérifie ton ID ou ta connexion.");
+            alert("Erreur réseau Android. L'application bloque l'accès internet. Vérifie les permissions dans Android Studio.");
             return null;
         }
     }
+            }
 
     async function startAutoChallenge() {
         let tagInput = document.getElementById('playerTag').value;
