@@ -110,34 +110,56 @@
     async function fetchTrophies(tag) {
     let cleanTag = tag.replace('#', '').toUpperCase().trim();
     
-    // On passe par le proxy magique AllOrigins pour débloquer GitHub
-    let targetUrl = `https://api.brawlapi.com/v1/player?tag=${cleanTag}`;
-    let url = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+    // Si le tag est trop court, on arrête de suite
+    if(cleanTag.length < 4) {
+        alert("Le tag entré semble trop court !");
+        return null;
+    }
+
+    // Version bypass avec un proxy CORS direct pour éviter l'encapsulation de données
+    let url = `https://cors-anywhere.herokuapp.com/https://api.brawlapi.com/v1/player?tag=${cleanTag}`;
 
     try {
         document.getElementById('loadingStatus').style.display = 'block';
         
-        let response = await fetch(url);
-        if (!response.ok) throw new Error("Erreur avec le proxy");
+        let response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
         
-        let rawData = await response.json();
-        // AllOrigins renvoie le résultat de l'API sous forme de texte dans "contents"
-        let data = JSON.parse(rawData.contents);
+        // Si le proxy demande une activation (CORS Anywhere demande parfois de cliquer sur un bouton une fois)
+        if (response.status === 403) {
+            document.getElementById('loadingStatus').style.display = 'none';
+            alert("Déblocage requis : va sur 'https://cors-anywhere.herokuapp.com/corsdemo' et clique sur le gros bouton, puis reviens ici !");
+            return null;
+        }
+
+        if (!response.ok) throw new Error("Code erreur serveur : " + response.status);
         
+        let data = await response.json();
         document.getElementById('loadingStatus').style.display = 'none';
         
         if (data && data.trophies !== undefined) {
             return data.trophies;
         } else {
-            alert("ID introuvable. Vérifie ton tag Brawl Stars.");
+            alert("ID valide mais impossible de lire les trophées.");
             return null;
         }
 
     } catch (error) {
         document.getElementById('loadingStatus').style.display = 'none';
-        console.error(error);
-        alert("Erreur de connexion. L'API est peut-être saturée, réessaye.");
-        return null;
+        
+        // SECOURS : On tente sans proxy au cas où l'environnement GitHub l'accepte finalement
+        try {
+            let resBackup = await fetch(`https://api.brawlapi.com/v1/player?tag=${cleanTag}`);
+            let dataBackup = await resBackup.json();
+            return dataBackup.trophies;
+        } catch(e) {
+            alert("Erreur précise : " + error.message + " | Regarde la console (F12) pour voir le détail.");
+            return null;
+        }
     }
     }
 
