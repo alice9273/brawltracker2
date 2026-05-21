@@ -106,7 +106,7 @@
         }
     }
 
-    // FONCTION DE RECUPERATION ROBUSTE COMPATIBLE GITHUB
+    // NOUVELLE METHODE PAR SCRAPING DIRECT SANS API
     async function fetchTrophies(tag) {
         let cleanTag = tag.replace('#', '').toUpperCase().trim();
         
@@ -115,41 +115,34 @@
             return null;
         }
 
-        let url = `https://brawltime.ninja/api/player/${cleanTag}`;
+        // On va directement lire le profil public sur Brawl Time Ninja à travers un proxy CORS super stable pour GitHub
+        let targetUrl = `https://brawltime.ninja/profile/${cleanTag}`;
+        let proxyUrl = `https://api.codetabs.com/v1/proxy?url=${encodeURIComponent(targetUrl)}`;
 
         try {
             document.getElementById('loadingStatus').style.display = 'block';
-            let response = await fetch(url);
+            let response = await fetch(proxyUrl);
 
             if (!response.ok) {
-                throw new Error("Joueur introuvable. Code : " + response.status);
+                throw new Error("Impossible de joindre le site de stats.");
             }
             
-            let data = await response.json();
+            let htmlText = await response.text();
             document.getElementById('loadingStatus').style.display = 'none';
             
-            if (data && data.trophies !== undefined) {
-                return data.trophies;
+            // On extrait les trophées du code de la page avec un regex hyper précis
+            let match = htmlText.match(/"trophies"\s*:\s*(\d+)/) || htmlText.match(/(\d+)\s*Trophies/);
+            
+            if (match && match[1]) {
+                return parseInt(match[1]);
             } else {
-                throw new Error("Données de trophées invalides");
+                throw new Error("ID introuvable ou mal écrit sur Brawl Stars.");
             }
 
         } catch (error) {
-            // SECOURS AUTOMATIQUE (Scraping via AllOrigins)
-            try {
-                let backupUrl = `https://api.allorigins.win/get?url=${encodeURIComponent('https://brawltime.ninja/profile/' + cleanTag)}`;
-                let res = await fetch(backupUrl);
-                let json = await res.json();
-                let match = json.contents.match(/"trophies"\s*:\s*(\d+)/) || json.contents.match(/(\d+)\s*Trophies/);
-                
-                document.getElementById('loadingStatus').style.display = 'none';
-                if(match) return parseInt(match[1]);
-                throw new Error("Impossible de décoder la page");
-            } catch(e) {
-                document.getElementById('loadingStatus').style.display = 'none';
-                alert("Erreur réseau : Impossible de contacter l'API. Réessaye plus tard.");
-                return null;
-            }
+            document.getElementById('loadingStatus').style.display = 'none';
+            alert("Erreur : " + error.message);
+            return null;
         }
     }
 
@@ -272,6 +265,7 @@
         }
     }
 
+    // Reset complet
     function resetAll() {
         if(confirm("Tu veux arrêter ce défi et changer de compte ?")) {
             localStorage.clear();
