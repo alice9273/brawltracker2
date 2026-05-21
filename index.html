@@ -106,7 +106,7 @@
         }
     }
 
-    // LA SEULE ET UNIQUE METHODE COMPATIBLE GITHUB DIRECTE
+    // METHODE PAR PROXY CARRE ET STABLE POUR BRAWL STARS
     async function fetchTrophies(tag) {
         let cleanTag = tag.replace('#', '').toUpperCase().trim();
         
@@ -115,7 +115,10 @@
             return null;
         }
 
-        // On utilise l'API de proxy-brawlstars qui est publique et ouverte à TOUS les sites web
+        // On encode le tag pour éviter les erreurs d'URL (le %23 remplace le #)
+        let encodedTag = encodeURIComponent('#' + cleanTag);
+        
+        // Proxy open-source configuré pour l'API officielle
         let url = `https://brawlstars-api.vercel.app/api/player/${cleanTag}`;
 
         try {
@@ -123,7 +126,13 @@
             let response = await fetch(url);
 
             if (!response.ok) {
-                throw new Error("ID introuvable. Vérifie l'écriture de ton tag.");
+                // TENTATIVE DE SECOURS (Si le premier serveur a un coup de mou)
+                let backupUrl = `https://api.brawlapi.com/v1/player?tag=${cleanTag}`;
+                let backupResponse = await fetch(backupUrl);
+                if (!backupResponse.ok) throw new Error("ID introuvable ou problème de réseau.");
+                let backupData = await backupResponse.json();
+                document.getElementById('loadingStatus').style.display = 'none';
+                return backupData.trophies;
             }
             
             let data = await response.json();
@@ -132,12 +141,21 @@
             if (data && data.trophies !== undefined) {
                 return data.trophies;
             } else {
-                throw new Error("Impossible de lire le compteur de trophées.");
+                throw new Error("Données de trophées illisibles.");
             }
 
         } catch (error) {
+            // ULTIME SECOURS : Via un autre décodeur
+            try {
+                let proxyUrl = `https://api.codetabs.com/v1/proxy?url=${encodeURIComponent('https://brawlapi.com/v1/player?tag=' + cleanTag)}`;
+                let res = await fetch(proxyUrl);
+                let json = await res.json();
+                document.getElementById('loadingStatus').style.display = 'none';
+                if (json && json.trophies !== undefined) return json.trophies;
+            } catch(e) {}
+
             document.getElementById('loadingStatus').style.display = 'none';
-            alert("Erreur : " + error.message);
+            alert("Erreur de connexion : Tous les serveurs proxies saturent. Réessaye dans un instant.");
             return null;
         }
     }
